@@ -1,6 +1,11 @@
 package com.darvoza.security.darvoza
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -15,10 +20,14 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.darvoza.security/apk_receiver"
+    private val ACTION_INSTALL_COMPLETE = "com.darvoza.security.INSTALL_COMPLETE"
     private var pendingApkPath: String? = null
     private var isSelfTriggered = false
 
@@ -66,7 +75,7 @@ class MainActivity : FlutterActivity() {
                     val path = call.argument<String>("path")
                     if (path != null) {
                         try {
-                            installApkFile(path)
+                            installApkDirectly(path)
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("INSTALL_FAILED", e.message, null)
@@ -147,54 +156,61 @@ class MainActivity : FlutterActivity() {
         return bitmap
     }
 
-    private fun installApkFile(filePath: String) {
+    /**
+     * Android PackageInstaller.Session orqali bevosita (to'g'ridan-to'g'ri) o'rnatish.
+     * Bu usulda tizim qaysi dastur orqali ochishni so'rab o'tirmaydi, to'g'ridan-to'g'ri o'rnatish boshlanadi.
+     */
+    private fun installApkDirectly(filePath: String) {
         val file = File(filePath)
-        val apkUri: Uri = FileProvider.getUriForFile(
-            this,
-            "${applicationContext.packageName}.fileprovider",
-            file
-        )
+        if (!file.exists()) throw Exception("APK file does not exist")
+
+        val pi = packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        
+        // Ilova nomini sessiyaga berish
+        try {
+            val archiveInfo = packageManager.getPackageArchiveInfo(filePath, 0)
+            if (archiveInfo != null) {
+                params.setAppPackageName(archiveInfo.packageName)
+            }
+        } catch (_: Exception) {}
+
+        val sessionId = pi.createSession(params)
+        val session = pi.openSession(sessionId)
+
+        val inputStream: InputStream = FileInputStream(file)
+        val outputStream: OutputStream = session.openWrite("package_install_darvoza", 0, file.length())
+
+        val buffer = ByteArray(65536)
+        var c: Int
+        while (inputStream.read(buffer).also { c = it } != -1) {
+            outputStream.write(buffer, 0, c)
+        }
+        session.fsync(outputStream)
+        inputStream.close()
+        outputStream.close()
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = ACTION_INSTALL_COMPLETE
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getActivity(this, sessionId, intent, flags)
 
         isSelfTriggered = true
-
-        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            data = apkUri
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
-            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-            putExtra(Intent.EXTRA_RETURN_RESULT, true)
-        }
-
-        // Tizimdagi standart o'rnatuvchini topish (Darvoza o'zini o'zi qayta chaqirmasligi uchun)
-        val pm = packageManager
-        val resolveInfos = pm.queryIntentActivities(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-            },
-            PackageManager.MATCH_DEFAULT_ONLY
-        )
-
-        var targeted = false
-        for (info in resolveInfos) {
-            val pkg = info.activityInfo.packageName
-            // Google yoki Android tizimining PackageInstaller ilovasi
-            if (pkg.contains("packageinstaller") || pkg.contains("google.android.packageinstaller")) {
-                intent.setClassName(pkg, info.activityInfo.name)
-                targeted = true
-                break
-            }
-        }
-
-        if (!targeted) {
-            intent.action = Intent.ACTION_VIEW
-            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
-        }
-
-        startActivity(intent)
+        session.commit(pendingIntent.intentSender)
+        session.close()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Agar o'zimiz tizimga o'rnatish uchun yuborgan bo'lsak, uni ushlab qolmaymiz
+        if (intent.action == ACTION_INSTALL_COMPLETE) {
+            // O'rnatish yakunlandi yoki foydalanuvchi tasdiqladi
+            return
+        }
         if (isSelfTriggered) {
             isSelfTriggered = false
             return
@@ -208,7 +224,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (isSelfTriggered) {
+        if (intent?.action == ACTION_INSTALL_COMPLETE || isSelfTriggered) {
             isSelfTriggered = false
             return
         }
