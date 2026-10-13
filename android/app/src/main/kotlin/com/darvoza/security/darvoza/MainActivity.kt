@@ -1,11 +1,17 @@
 package com.darvoza.security.darvoza
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 
@@ -23,6 +29,19 @@ class MainActivity : FlutterActivity() {
                 "getInitialApk" -> {
                     result.success(pendingApkPath)
                     pendingApkPath = null
+                }
+                "getApkMetadata" -> {
+                    val path = call.argument<String>("path")
+                    if (path != null) {
+                        try {
+                            val metadata = extractApkMetadata(path)
+                            result.success(metadata)
+                        } catch (e: Exception) {
+                            result.error("METADATA_FAILED", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_PATH", "Path is null", null)
+                    }
                 }
                 "installApk" -> {
                     val path = call.argument<String>("path")
@@ -54,6 +73,60 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun extractApkMetadata(filePath: String): Map<String, Any?> {
+        val pm = packageManager
+        val pi = pm.getPackageArchiveInfo(filePath, PackageManager.GET_ACTIVITIES or PackageManager.GET_PERMISSIONS)
+        val data = mutableMapOf<String, Any?>()
+
+        if (pi != null) {
+            val appInfo = pi.applicationInfo
+            if (appInfo != null) {
+                appInfo.sourceDir = filePath
+                appInfo.publicSourceDir = filePath
+
+                val appName = pm.getApplicationLabel(appInfo).toString()
+                val packageName = pi.packageName
+                val versionName = pi.versionName ?: "1.0"
+                val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    pi.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    pi.versionCode.toLong()
+                }
+
+                data["appName"] = appName
+                data["packageName"] = packageName
+                data["versionName"] = versionName
+                data["versionCode"] = versionCode
+
+                // Ikonkani baytlar shaklida olish (PNG)
+                try {
+                    val iconDrawable = pm.getApplicationIcon(appInfo)
+                    val bitmap = drawableToBitmap(iconDrawable)
+                    val stream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                    data["iconBytes"] = stream.toByteArray()
+                } catch (e: Exception) {
+                    data["iconBytes"] = null
+                }
+            }
+        }
+        return data
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            return drawable.bitmap
+        }
+        val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 128
+        val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 128
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     private fun installApkFile(filePath: String) {

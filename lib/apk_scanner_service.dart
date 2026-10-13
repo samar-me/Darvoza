@@ -21,6 +21,8 @@ class ApkAnalysisResult {
   final String? targetSdk;
   final String summaryTitle;
   final String reason;
+  final Uint8List? appIconBytes;
+  final String? versionName;
   final List<String> vulnerabilityNotes;
 
   ApkAnalysisResult({
@@ -38,6 +40,8 @@ class ApkAnalysisResult {
     required this.vulnerabilityNotes,
     this.appName,
     this.packageName,
+    this.versionName,
+    this.appIconBytes,
     this.minSdk,
     this.targetSdk,
   });
@@ -172,7 +176,10 @@ class ApkScannerService {
   };
 
   /// APK faylni to'liq kiberxavfsizlik chuqurligida tahlil qilish
-  static Future<ApkAnalysisResult> analyzeApk(String filePath) async {
+  static Future<ApkAnalysisResult> analyzeApk(
+    String filePath, {
+    Map<dynamic, dynamic>? nativeMetadata,
+  }) async {
     final file = File(filePath);
     if (!await file.exists()) {
       throw Exception("Fayl topilmadi: $filePath");
@@ -299,6 +306,11 @@ class ApkScannerService {
       reason = "Ilova o'ta maxfiy huquqlarni (SMS, Accessibility, tizim nazorati) talab qilmoqda. O'rnatish tavsiya etilmaydi!";
     }
 
+    final realAppName = nativeMetadata?['appName'] as String? ?? foundPackageName ?? fileName;
+    final realPackageName = nativeMetadata?['packageName'] as String? ?? foundPackageName;
+    final realVersionName = nativeMetadata?['versionName'] as String?;
+    final iconBytes = nativeMetadata?['iconBytes'] as Uint8List?;
+
     return ApkAnalysisResult(
       fileName: fileName,
       filePath: filePath,
@@ -312,7 +324,10 @@ class ApkScannerService {
       summaryTitle: summaryTitle,
       reason: reason,
       vulnerabilityNotes: notes,
-      packageName: foundPackageName,
+      appName: realAppName,
+      packageName: realPackageName,
+      versionName: realVersionName,
+      appIconBytes: iconBytes,
       minSdk: minSdk,
       targetSdk: targetSdk,
     );

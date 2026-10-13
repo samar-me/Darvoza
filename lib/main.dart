@@ -258,8 +258,19 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     });
 
     try {
-      final result = await ApkScannerService.analyzeApk(filePath);
-      await Future.delayed(const Duration(milliseconds: 400));
+      Map<dynamic, dynamic>? nativeMeta;
+      try {
+        nativeMeta = await _platform.invokeMethod<Map<dynamic, dynamic>>(
+          'getApkMetadata',
+          {'path': filePath},
+        );
+      } catch (_) {}
+
+      final result = await ApkScannerService.analyzeApk(
+        filePath,
+        nativeMetadata: nativeMeta,
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
 
       setState(() {
@@ -297,6 +308,106 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
 
     if (files.isNotEmpty && files.first.path != null) {
       _runComprehensiveScan(files.first.path!);
+    }
+  }
+
+  Future<void> _confirmAndInstallApk(ApkAnalysisResult res) async {
+    _triggerHaptic(HapticFeedbackType.selection);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.install_mobile, color: Color(0xFF00FF88)),
+            SizedBox(width: 10),
+            Text("O'rnatishni tasdiqlang", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "\"${res.appName ?? res.fileName}\" ilovasini telefoningizga o'rnatmoqchimisiz?",
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+            if (!res.isSafe) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF2E63).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  "Diqqat: Ushbu ilovada xavfli ruxsatlar mavjud!",
+                  style: TextStyle(color: Color(0xFFFF2E63), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Bekor qilish", style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FF88),
+              foregroundColor: const Color(0xFF05101E),
+            ),
+            child: const Text("Ha, o'rnatish", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _installApk(res.filePath);
+    }
+  }
+
+  Future<void> _confirmAndDeleteApk(ApkAnalysisResult res) async {
+    _triggerHaptic(HapticFeedbackType.heavy);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.delete_outline, color: Color(0xFFFF2E63)),
+            SizedBox(width: 10),
+            Text("O'chirishni tasdiqlang", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "\"${res.fileName}\" APK faylini telefon xotirasidan butunlay o'chirib tashlamoqchimisiz?",
+          style: const TextStyle(fontSize: 13, color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Bekor qilish", style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF2E63),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Ha, o'chirish", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _deleteDangerousApk(res.filePath);
     }
   }
 
@@ -926,9 +1037,9 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Natija kartochkasi
+          // Asosiy Ilova Pasporti (Nomi, Ikonkasi, Versiyasi)
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFF111827),
               borderRadius: BorderRadius.circular(18),
@@ -937,35 +1048,63 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
             child: Column(
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(statusIcon, color: statusColor, size: 32),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              res.summaryTitle,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                color: statusColor,
-                              ),
+                    // Ilovaning Asl Ikonkasi
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E2638),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: res.appIconBytes != null
+                            ? Image.memory(
+                                res.appIconBytes!,
+                                fit: BoxFit.cover,
+                              )
+                            : Icon(statusIcon, color: statusColor, size: 32),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Ilova Nomi va Tafsilotlari
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            res.appName ?? res.fileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
                             ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Versiya: ${res.versionName ?? '1.0'} • ${(res.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB",
+                            style: const TextStyle(fontSize: 11, color: Colors.white60),
+                          ),
+                          if (res.packageName != null) ...[
+                            const SizedBox(height: 1),
                             Text(
-                              "${(res.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB • ${res.fileName}",
-                              style: const TextStyle(fontSize: 11, color: Colors.white54),
+                              res.packageName!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10, color: Colors.white38),
                             ),
                           ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    // Baholash doirasi
+                    // Xavfsizlik Skori
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 46,
+                      height: 46,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: statusColor.withValues(alpha: 0.15),
@@ -975,7 +1114,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                         child: Text(
                           "${res.securityScore}",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w900,
                             color: statusColor,
                           ),
@@ -984,10 +1123,26 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  res.reason,
-                  style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(statusIcon, color: statusColor, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          res.reason,
+                          style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -1047,58 +1202,68 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
             const SizedBox(height: 18),
           ],
 
-          // Tugmalar
+          // Harakat Tugmalari (Har ikkala holatda ham O'rnatish va O'chirish imkoni bor)
           Row(
             children: [
-              if (res.isSafe)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _installApk(res.filePath),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FF88),
-                      foregroundColor: const Color(0xFF05101E),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.install_mobile, color: Colors.black87),
-                    label: const Text(
-                      "O'RNATISH",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: () => _confirmAndInstallApk(res),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: res.isSafe ? const Color(0xFF00FF88) : const Color(0xFF1E293B),
+                    foregroundColor: res.isSafe ? const Color(0xFF05101E) : Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: res.isSafe ? BorderSide.none : const BorderSide(color: Color(0xFF00FF88)),
                     ),
                   ),
-                )
-              else
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _deleteDangerousApk(res.filePath),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF2E63),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text(
-                      "FAYLNI O'CHIRISH",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  icon: Icon(
+                    Icons.install_mobile,
+                    color: res.isSafe ? Colors.black87 : const Color(0xFF00FF88),
+                    size: 18,
+                  ),
+                  label: Text(
+                    "O'RNATISH",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: res.isSafe ? Colors.black87 : Colors.white,
                     ),
                   ),
                 ),
-              const SizedBox(width: 10),
-              OutlinedButton(
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: () => _confirmAndDeleteApk(res),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF2E63).withValues(alpha: 0.15),
+                    foregroundColor: const Color(0xFFFF2E63),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFFF2E63)),
+                    ),
+                  ),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text(
+                    "O'CHIRISH",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
                 onPressed: () {
                   _triggerHaptic(HapticFeedbackType.selection);
                   setState(() {
                     _analysisResult = null;
                   });
                 },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: const BorderSide(color: Color(0xFF1F293D)),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text("Yopish"),
+                icon: const Icon(Icons.close, color: Colors.white60),
+                tooltip: "Yopish",
               ),
             ],
           ),
