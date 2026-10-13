@@ -9,33 +9,67 @@ void main() {
   runApp(const DarvozaApp());
 }
 
-class DarvozaApp extends StatelessWidget {
+class DarvozaApp extends StatefulWidget {
   const DarvozaApp({super.key});
+
+  @override
+  State<DarvozaApp> createState() => _DarvozaAppState();
+}
+
+class _DarvozaAppState extends State<DarvozaApp> {
+  String _currentLanguage = "uz"; // "uz", "ru", "en"
+  bool _hapticEnabled = true;
+
+  void _changeLanguage(String lang) {
+    setState(() {
+      _currentLanguage = lang;
+    });
+  }
+
+  void _toggleHaptic(bool val) {
+    setState(() {
+      _hapticEnabled = val;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Darvoza Cyber Security',
+      title: 'Darvoza Security',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF080C14),
-        fontFamily: 'sans-serif',
+        scaffoldBackgroundColor: const Color(0xFF090D16),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF00FF88),
-          secondary: Color(0xFF00E5FF),
           surface: Color(0xFF111726),
           error: Color(0xFFFF2E63),
         ),
       ),
-      home: const DarvozaMainScreen(),
+      home: DarvozaMainScreen(
+        language: _currentLanguage,
+        hapticEnabled: _hapticEnabled,
+        onLanguageChanged: _changeLanguage,
+        onHapticToggled: _toggleHaptic,
+      ),
     );
   }
 }
 
 class DarvozaMainScreen extends StatefulWidget {
-  const DarvozaMainScreen({super.key});
+  final String language;
+  final bool hapticEnabled;
+  final Function(String) onLanguageChanged;
+  final Function(bool) onHapticToggled;
+
+  const DarvozaMainScreen({
+    super.key,
+    required this.language,
+    required this.hapticEnabled,
+    required this.onLanguageChanged,
+    required this.onHapticToggled,
+  });
 
   @override
   State<DarvozaMainScreen> createState() => _DarvozaMainScreenState();
@@ -45,11 +79,137 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   static const MethodChannel _platform =
       MethodChannel('com.darvoza.security/apk_receiver');
 
-  int _selectedTab = 0; // 0: Posbon (Interception), 1: Audit (Tahlil vositasi), 2: Sozlamalar
+  int _selectedTab = 0; // 0: Himoya (Asosiy), 1: Xavfsizlik bo'yicha maslahatlar, 2: Sozlamalar
   bool _isScanning = false;
   double _scanProgress = 0.0;
   String _scanStatusText = "FAYL TAHLIL QILINMOQDA...";
   ApkAnalysisResult? _analysisResult;
+  bool _autoGuardActive = true;
+
+  // Ko'p tilli lug'at (Localization)
+  Map<String, Map<String, String>> get _strings => {
+        "uz": {
+          "appName": "DARVOZA",
+          "subtitle": "XAVFSIZLIK QALQONI",
+          "active": "FAOL",
+          "inactive": "O'CHIRILGAN",
+          "tabGuard": "Himoya",
+          "tabTips": "Maslahatlar",
+          "tabSettings": "Sozlamalar",
+          "autoGuardTitle": "Avtomatik himoya yoqilgan",
+          "autoGuardDesc":
+              "Telegram, brauzer yoki fayllardan yangi APK ochilganda avtomatik tekshiruv boshlanadi.",
+          "btnScan": "Faylni tanlash va tekshirish",
+          "offlineTitle": "100% Qurilmada",
+          "offlineDesc": "Internet talab qilinmaydi",
+          "shaTitle": "Raqamli imzo",
+          "shaDesc": "Soxta ilovalarni aniqlash",
+          "settingsTitle": "Sozlamalar",
+          "langTitle": "Ilova tili",
+          "hapticTitle": "Tugma bosilganda tebranish",
+          "privacyTitle": "Maxfiylik kafolati",
+          "privacyDesc":
+              "Darvoza ilovasi shaxsiy ma'lumotlaringizni yig'maydi va serverga jo'natmaydi.",
+          "appVersion": "Dastur versiyasi",
+          "tipsTitle": "Xavfsizlik bo'yicha muhim eslatmalar",
+          "tip1Title": "SMS o'qish ruxsati",
+          "tip1Desc":
+              "Agar oddiy o'yin yoki kalkulyator SMS o'qishni so'rasa, bu bank kodlarini o'g'irlash uchun bo'lishi mumkin.",
+          "tip2Title": "Maxsus imkoniyatlar (Accessibility)",
+          "tip2Desc":
+              "Bu ruxsat ilovaga ekranda yozgan parollaringizni ko'rish imkonini beradi. Buni faqat ishonchli dasturlarga bering.",
+          "tip3Title": "Soxta yangilanishlar",
+          "tip3Desc":
+              "Telegram kanallardan yuklangan noma'lum APK fayllarni o'rnatishdan oldin doimo Darvoza orqali tekshiring.",
+        },
+        "ru": {
+          "appName": "DARVOZA",
+          "subtitle": "КИБЕР-ЩИТ",
+          "active": "АКТИВЕН",
+          "inactive": "ОТКЛЮЧЕН",
+          "tabGuard": "Защита",
+          "tabTips": "Советы",
+          "tabSettings": "Настройки",
+          "autoGuardTitle": "Автозащита включена",
+          "autoGuardDesc":
+              "При открытии любого APK из Telegram или браузера он автоматически проверяется перед установкой.",
+          "btnScan": "Выбрать APK и проверить",
+          "offlineTitle": "100% Локально",
+          "offlineDesc": "Работает без интернета",
+          "shaTitle": "Цифровая подпись",
+          "shaDesc": "Поиск поддельных APK",
+          "settingsTitle": "Настройки",
+          "langTitle": "Язык приложения",
+          "hapticTitle": "Вибрация при нажатии",
+          "privacyTitle": "Политика конфиденциальности",
+          "privacyDesc":
+              "Darvoza не собирает и не отправляет ваши личные данные на сторонние серверы.",
+          "appVersion": "Версия приложения",
+          "tipsTitle": "Правила безопасности",
+          "tip1Title": "Доступ к SMS",
+          "tip1Desc":
+              "Если игра или утилита просит читать SMS — это угроза кражи банковских кодов.",
+          "tip2Title": "Специальные возможности",
+          "tip2Desc":
+              "Дает приложению право считывать нажатия клавиш и пароли. Будьте предельно осторожны.",
+          "tip3Title": "Сторонние APK",
+          "tip3Desc":
+              "Всегда проверяйте файлы из Telegram и неизвестных сайтов перед установкой.",
+        },
+        "en": {
+          "appName": "DARVOZA",
+          "subtitle": "CYBER SHIELD",
+          "active": "ACTIVE",
+          "inactive": "DISABLED",
+          "tabGuard": "Guard",
+          "tabTips": "Tips",
+          "tabSettings": "Settings",
+          "autoGuardTitle": "Auto-Guard is Active",
+          "autoGuardDesc":
+              "Any incoming APK from Telegram or browsers will be intercepted and scanned before installation.",
+          "btnScan": "Select & Scan APK File",
+          "offlineTitle": "100% On-Device",
+          "offlineDesc": "No internet connection needed",
+          "shaTitle": "Digital Signature",
+          "shaDesc": "Detect fake & modified apps",
+          "settingsTitle": "Settings",
+          "langTitle": "App Language",
+          "hapticTitle": "Haptic Feedback",
+          "privacyTitle": "Privacy Assurance",
+          "privacyDesc":
+              "Darvoza runs completely offline and never uploads your private files or analytics.",
+          "appVersion": "App Version",
+          "tipsTitle": "Security Best Practices",
+          "tip1Title": "SMS Read Permissions",
+          "tip1Desc":
+              "If a casual game or utility requests SMS reading, it might be designed to steal banking OTPs.",
+          "tip2Title": "Accessibility Services",
+          "tip2Desc":
+              "Allows full keystroke logging and screen monitoring. Grant this only to strictly trusted apps.",
+          "tip3Title": "Third-Party APKs",
+          "tip3Desc":
+              "Always inspect APK files downloaded from messenger channels before opening them.",
+        },
+      };
+
+  String _t(String key) {
+    return _strings[widget.language]?[key] ?? _strings["uz"]![key] ?? key;
+  }
+
+  void _triggerHaptic(HapticFeedbackType type) {
+    if (!widget.hapticEnabled) return;
+    switch (type) {
+      case HapticFeedbackType.selection:
+        HapticFeedback.selectionClick();
+        break;
+      case HapticFeedbackType.medium:
+        HapticFeedback.mediumImpact();
+        break;
+      case HapticFeedbackType.heavy:
+        HapticFeedback.heavyImpact();
+        break;
+    }
+  }
 
   @override
   void initState() {
@@ -75,31 +235,31 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   }
 
   Future<void> _runComprehensiveScan(String filePath) async {
-    HapticFeedback.mediumImpact();
+    _triggerHaptic(HapticFeedbackType.medium);
     setState(() {
       _isScanning = true;
       _analysisResult = null;
-      _scanProgress = 0.15;
-      _scanStatusText = "APK ZIP ARXIVI OCHILMOQDA...";
+      _scanProgress = 0.20;
+      _scanStatusText = "Fayl ochilmoqda...";
+    });
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    setState(() {
+      _scanProgress = 0.60;
+      _scanStatusText = "Ruxsatlar va imzolar tekshirilmoqda...";
     });
 
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     setState(() {
-      _scanProgress = 0.45;
-      _scanStatusText = "SHA-256 VA IMZOLAR TEKSHIRILMOQDA...";
-    });
-
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() {
-      _scanProgress = 0.80;
-      _scanStatusText = "RUXSATLAR & KIBER TAHDIDLAR BAHOLANMOQDA...";
+      _scanProgress = 0.90;
+      _scanStatusText = "Xavfsizlik darajasi baholanmoqda...";
     });
 
     try {
       final result = await ApkScannerService.analyzeApk(filePath);
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
       setState(() {
@@ -109,9 +269,9 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       });
 
       if (result.isSafe) {
-        HapticFeedback.lightImpact();
+        _triggerHaptic(HapticFeedbackType.selection);
       } else {
-        HapticFeedback.heavyImpact();
+        _triggerHaptic(HapticFeedbackType.heavy);
       }
     } catch (e) {
       if (!mounted) return;
@@ -122,13 +282,14 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFFF2E63),
-          content: Text("Xatolik yuz berdi: $e"),
+          content: Text("Xatolik: $e"),
         ),
       );
     }
   }
 
   Future<void> _pickFileManually() async {
+    _triggerHaptic(HapticFeedbackType.selection);
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['apk'],
@@ -140,6 +301,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   }
 
   Future<void> _installApk(String path) async {
+    _triggerHaptic(HapticFeedbackType.selection);
     try {
       await _platform.invokeMethod('installApk', {'path': path});
     } catch (e) {
@@ -152,6 +314,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   }
 
   Future<void> _deleteDangerousApk(String path) async {
+    _triggerHaptic(HapticFeedbackType.heavy);
     try {
       final res = await _platform.invokeMethod<bool>('deleteApk', {'path': path});
       if (res == true && mounted) {
@@ -161,7 +324,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF00FF88),
-            content: Text("Zararli APK fayl xotiradan to'liq tozalab tashlandi!"),
+            content: Text("Fayl muvaffaqiyatli o'chirildi!"),
           ),
         );
       }
@@ -179,16 +342,12 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0A101D), Color(0xFF060911)],
-          ),
+          color: Color(0xFF0A0E17),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              _buildTopCyberHeader(),
+              _buildCleanHeader(),
               Expanded(
                 child: _isScanning
                     ? _buildScanningHud()
@@ -196,7 +355,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                         ? _buildDetailedThreatReport(_analysisResult!)
                         : _buildTabContent(),
               ),
-              if (!_isScanning && _analysisResult == null) _buildCyberBottomNav(),
+              if (!_isScanning && _analysisResult == null) _buildCleanBottomNav(),
             ],
           ),
         ),
@@ -204,13 +363,13 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     );
   }
 
-  Widget _buildTopCyberHeader() {
+  Widget _buildCleanHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0E1526).withValues(alpha: 0.6),
-        border: const Border(
-          bottom: BorderSide(color: Color(0xFF1E293B), width: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: const BoxDecoration(
+        color: Color(0xFF101624),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF1E2638), width: 1),
         ),
       ),
       child: Row(
@@ -222,38 +381,38 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                 borderRadius: BorderRadius.circular(10),
                 child: Image.asset(
                   'assets/images/darvoza_logo.png',
-                  width: 38,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    width: 38,
-                    height: 38,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00FF88).withValues(alpha: 0.2),
+                      color: const Color(0xFF00FF88).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.shield, color: Color(0xFF00FF88)),
+                    child: const Icon(Icons.shield, color: Color(0xFF00FF88), size: 22),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    "DARVOZA",
-                    style: TextStyle(
+                    _t("appName"),
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 2.5,
+                      letterSpacing: 2,
                       color: Colors.white,
                     ),
                   ),
                   Text(
-                    "KIBER XAVFSIZLIK QALQONI",
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
+                    _t("subtitle"),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 1.2,
                       color: Color(0xFF00FF88),
                     ),
@@ -262,29 +421,49 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
               ),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00FF88).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFF00FF88).withValues(alpha: 0.4),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.bolt, color: Color(0xFF00FF88), size: 14),
-                SizedBox(width: 4),
-                Text(
-                  "FAOL",
-                  style: TextStyle(
-                    color: Color(0xFF00FF88),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+          // Faollik holati (Bosilganda almashtirish imkoniyati bilan)
+          GestureDetector(
+            onTap: () {
+              _triggerHaptic(HapticFeedbackType.selection);
+              setState(() {
+                _autoGuardActive = !_autoGuardActive;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _autoGuardActive
+                    ? const Color(0xFF00FF88).withValues(alpha: 0.12)
+                    : Colors.white10,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _autoGuardActive
+                      ? const Color(0xFF00FF88).withValues(alpha: 0.5)
+                      : Colors.white24,
                 ),
-              ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _autoGuardActive ? const Color(0xFF00FF88) : Colors.white38,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _autoGuardActive ? _t("active") : _t("inactive"),
+                    style: TextStyle(
+                      color: _autoGuardActive ? const Color(0xFF00FF88) : Colors.white60,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -297,7 +476,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       case 0:
         return _buildGuardDashboard();
       case 1:
-        return _buildSystemAuditDashboard();
+        return _buildTipsDashboard();
       case 2:
         return _buildSettingsDashboard();
       default:
@@ -313,26 +492,21 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CyberRadarWidget(
-              size: 240,
+              size: 220,
               primaryColor: const Color(0xFF00FF88),
               statusText: _scanStatusText,
               progress: _scanProgress,
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 32),
             const Text(
-              "NEYRON VA GEVRISTIK TAHLIL",
+              "APK FAYL XAVFSIZLIGI TEKSHIRILMOQDA",
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1.8,
-                color: Colors.white60,
+                letterSpacing: 1.2,
+                color: Colors.white70,
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "APK tarkibidagi ruxsatnomalar, yashirin dastur kodi va ruxsatsiz masofaviy ulanishlar tekshirilmoqda.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
         ),
@@ -346,98 +520,82 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       child: Column(
         children: [
           const SizedBox(height: 10),
-          // Markaziy Kiber Gologramma
+          // Markaziy Karta
           Container(
-            padding: const EdgeInsets.all(24),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
             decoration: BoxDecoration(
-              color: const Color(0xFF101728),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF1E293B)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF00FF88).withValues(alpha: 0.05),
-                  blurRadius: 40,
-                  spreadRadius: 10,
-                ),
-              ],
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF1F293D)),
             ),
             child: Column(
               children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00FF88).withValues(alpha: 0.2),
-                            blurRadius: 35,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/images/darvoza_logo.png',
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.shield,
+                      size: 80,
+                      color: Color(0xFF00FF88),
                     ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/images/darvoza_logo.png',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.security,
-                          size: 100,
-                          color: Color(0xFF00FF88),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  "Avtomatik Posbon Yoqilgan",
-                  style: TextStyle(
-                    fontSize: 20,
+                const SizedBox(height: 18),
+                Text(
+                  _t("autoGuardTitle"),
+                  style: const TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  "Telegram, WhatsApp yoki brauzerdan yuklangan har qanday .apk fayl telefoningizga o'rnatilishidan oldin avtomatik 'Darvoza'da to'xtatiladi.",
+                Text(
+                  _t("autoGuardDesc"),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.white60, height: 1.4),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white60,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 24),
+
+                // Qulay, to'liq sig'adigan bosh tugma
                 SizedBox(
                   width: double.infinity,
+                  height: 52,
                   child: ElevatedButton(
                     onPressed: _pickFileManually,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00FF88),
                       foregroundColor: const Color(0xFF05101E),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 8,
-                      shadowColor: const Color(0xFF00FF88).withValues(alpha: 0.4),
+                      elevation: 4,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.file_upload_outlined, size: 22, color: Colors.black87),
-                        SizedBox(width: 10),
-                        Text(
-                          "APK FAYLNI TANLAB SKANERLASH",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                            color: Colors.black87,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.file_open_rounded, size: 20, color: Colors.black87),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            _t("btnScan"),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
                       ],
@@ -447,23 +605,63 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Tezkor Statistika Panel
+          // 2 ta ixcham parametr kartochkasi
           Row(
             children: [
-              _buildStatMiniCard(
-                icon: Icons.offline_bolt_outlined,
-                title: "100% Offline",
-                subtitle: "Maxfiylik kafolatlangan",
-                accentColor: const Color(0xFF00E5FF),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF111827),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF1F293D)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.lock_clock_outlined, color: Color(0xFF00FF88), size: 20),
+                      const SizedBox(height: 8),
+                      Text(
+                        _t("offlineTitle"),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _t("offlineDesc"),
+                        style: const TextStyle(fontSize: 11, color: Colors.white54),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
-              _buildStatMiniCard(
-                icon: Icons.verified_outlined,
-                title: "SHA-256 Imzo",
-                subtitle: "Anti-Modifikatsiya",
-                accentColor: const Color(0xFF00FF88),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF111827),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF1F293D)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.verified_outlined, color: Color(0xFF00E5FF), size: 20),
+                      const SizedBox(height: 8),
+                      Text(
+                        _t("shaTitle"),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _t("shaDesc"),
+                        style: const TextStyle(fontSize: 11, color: Colors.white54),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -472,119 +670,66 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     );
   }
 
-  Widget _buildStatMiniCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color accentColor,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1E293B)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: accentColor, size: 24),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 11, color: Colors.white54),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSystemAuditDashboard() {
+  // Tushunarsiz "Kiber audit" o'rniga haqiqiy foydali "Xavfsizlik Maslahatlari" bo'limi
+  Widget _buildTipsDashboard() {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const Text(
-          "QURILMA KIBER AUDITI",
-          style: TextStyle(
-            fontSize: 18,
+        Text(
+          _t("tipsTitle"),
+          style: const TextStyle(
+            fontSize: 16,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 8),
-        const Text(
-          "Qurilmangizdagi xavfli kanallar va monitoring ko'rsatkichlari:",
-          style: TextStyle(color: Colors.white54, fontSize: 13),
-        ),
         const SizedBox(height: 16),
-        _buildAuditTile(
-          title: "APK Intent Interception",
-          desc: "Noma'lum manbalardan kelgan paketlarni tutib olish",
-          status: "FAOL",
-          statusColor: const Color(0xFF00FF88),
-          icon: Icons.shield_outlined,
+        _buildSimpleTipCard(
+          icon: Icons.sms_outlined,
+          color: const Color(0xFFFF2E63),
+          title: _t("tip1Title"),
+          desc: _t("tip1Desc"),
         ),
-        _buildAuditTile(
-          title: "Maxsus Imkoniyatlar (Accessibility)",
-          desc: "Ilovalar ekran matnlarini o'qishini nazorat qilish",
-          status: "HIMOYA OSTIDA",
-          statusColor: const Color(0xFF00E5FF),
-          icon: Icons.visibility_outlined,
+        _buildSimpleTipCard(
+          icon: Icons.accessibility_new_outlined,
+          color: const Color(0xFFFFB800),
+          title: _t("tip2Title"),
+          desc: _t("tip2Desc"),
         ),
-        _buildAuditTile(
-          title: "SMS Hijacking monitoringi",
-          desc: "Bank SMS kodlarini tutib olishga urinishlarni to'xtatish",
-          status: "KUCHAYTIRILGAN",
-          statusColor: const Color(0xFF00FF88),
-          icon: Icons.sms_failed_outlined,
-        ),
-        _buildAuditTile(
-          title: "Overlay (Phishing oyna) nazorati",
-          desc: "Boshqa dasturlar ustiga soxta oyna ochilishini cheklash",
-          status: "MONITORING",
-          statusColor: const Color(0xFFFFB800),
-          icon: Icons.layers_outlined,
+        _buildSimpleTipCard(
+          icon: Icons.download_for_offline_outlined,
+          color: const Color(0xFF00FF88),
+          title: _t("tip3Title"),
+          desc: _t("tip3Desc"),
         ),
       ],
     );
   }
 
-  Widget _buildAuditTile({
+  Widget _buildSimpleTipCard({
+    required IconData icon,
+    required Color color,
     required String title,
     required String desc,
-    required String status,
-    required Color statusColor,
-    required IconData icon,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF111827),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFF1F293D)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: statusColor, size: 24),
+            child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -598,24 +743,9 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                 const SizedBox(height: 4),
                 Text(
                   desc,
-                  style: const TextStyle(fontSize: 12, color: Colors.white54),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4),
                 ),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: statusColor,
-              ),
             ),
           ),
         ],
@@ -623,76 +753,156 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     );
   }
 
+  // To'liq ishlaydigan Sozlamalar bo'limi
   Widget _buildSettingsDashboard() {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const Text(
-          "SOZLAMALAR & MAXFIYLIK",
-          style: TextStyle(
-            fontSize: 18,
+        Text(
+          _t("settingsTitle"),
+          style: const TextStyle(
+            fontSize: 16,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
             color: Colors.white,
           ),
         ),
         const SizedBox(height: 16),
-        _buildSettingsItem(
-          icon: Icons.language,
-          title: "Ilova Tili",
-          value: "O'zbekcha (Lotin)",
+
+        // Tilni o'zgartirish tugmasi (ishlaydi)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1F293D)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.language, color: Color(0xFF00FF88), size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  _t("langTitle"),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+              DropdownButton<String>(
+                value: widget.language,
+                dropdownColor: const Color(0xFF111827),
+                underline: const SizedBox(),
+                items: const [
+                  DropdownMenuItem(value: "uz", child: Text("O'zbek")),
+                  DropdownMenuItem(value: "ru", child: Text("Русский")),
+                  DropdownMenuItem(value: "en", child: Text("English")),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    _triggerHaptic(HapticFeedbackType.selection);
+                    widget.onLanguageChanged(val);
+                  }
+                },
+              ),
+            ],
+          ),
         ),
-        _buildSettingsItem(
-          icon: Icons.vibration,
-          title: "Haptik Tebranish",
-          value: "Yoqilgan",
+
+        // Haptik tebranish (ishlaydi)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1F293D)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.vibration, color: Color(0xFF00FF88), size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  _t("hapticTitle"),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+              Switch(
+                value: widget.hapticEnabled,
+                activeThumbColor: const Color(0xFF00FF88),
+                onChanged: (val) {
+                  widget.onHapticToggled(val);
+                  if (val) HapticFeedback.mediumImpact();
+                },
+              ),
+            ],
+          ),
         ),
-        _buildSettingsItem(
-          icon: Icons.lock_outline,
-          title: "Maxfiylik Siyosati",
-          value: "100% Offline (Hech qanday ma'lumot uzatilmaydi)",
+
+        // Maxfiylik kafolati
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1F293D)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.shield_moon_outlined, color: Color(0xFF00E5FF), size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t("privacyTitle"),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _t("privacyDesc"),
+                      style: const TextStyle(fontSize: 12, color: Colors.white54, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        _buildSettingsItem(
-          icon: Icons.info_outline,
-          title: "Talqin (Versiya)",
-          value: "v2.0.0 Cyber Edition",
+
+        // Versiya
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1F293D)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white60, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  _t("appVersion"),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+              const Text(
+                "v2.1 Stable",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00FF88)),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSettingsItem({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF00FF88), size: 22),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 12, color: Colors.white54)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // Tahlil natijasi ekrani
   Widget _buildDetailedThreatReport(ApkAnalysisResult res) {
     final Color statusColor;
     final IconData statusIcon;
@@ -716,20 +926,13 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Kiber Natija Banner
+          // Natija kartochkasi
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: statusColor.withValues(alpha: 0.5), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: statusColor.withValues(alpha: 0.15),
-                  blurRadius: 30,
-                  spreadRadius: 2,
-                ),
-              ],
             ),
             child: Column(
               children: [
@@ -738,7 +941,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(statusIcon, color: statusColor, size: 36),
+                        Icon(statusIcon, color: statusColor, size: 32),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -746,24 +949,23 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                             Text(
                               res.summaryTitle,
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 1.2,
                                 color: statusColor,
                               ),
                             ),
                             Text(
-                              "${(res.fileSize / (1024 * 1024)).toStringAsFixed(2)} MB • ${res.fileName}",
+                              "${(res.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB • ${res.fileName}",
                               style: const TextStyle(fontSize: 11, color: Colors.white54),
                             ),
                           ],
                         ),
                       ],
                     ),
-                    // Xavfsizlik Skori Indeksi
+                    // Baholash doirasi
                     Container(
-                      width: 54,
-                      height: 54,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: statusColor.withValues(alpha: 0.15),
@@ -773,7 +975,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                         child: Text(
                           "${res.securityScore}",
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w900,
                             color: statusColor,
                           ),
@@ -782,76 +984,70 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Text(
                   res.reason,
-                  style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.4),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Kriptografik Barmoq Izi (SHA-256)
+          // SHA-256
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0B1120),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              color: const Color(0xFF0D121D),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF1F293D)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
-                    Icon(Icons.fingerprint, size: 16, color: Color(0xFF00E5FF)),
-                    SizedBox(width: 6),
-                    Text(
-                      "SHA-256 RAQAMLI BARMOQ IZI:",
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
-                    ),
-                  ],
+                const Text(
+                  "SHA-256 IMZOSI:",
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 SelectableText(
                   res.sha256,
-                  style: const TextStyle(fontSize: 11, color: Colors.white60, fontFamily: 'monospace'),
+                  style: const TextStyle(fontSize: 10, color: Colors.white60, fontFamily: 'monospace'),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Xavfli Ruxsatlar
+          // Xavfli ruxsatlar
           if (res.dangerousPermissions.isNotEmpty) ...[
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                "🔴 Yuqori Xavfli Ruxsatlar (${res.dangerousPermissions.length}):",
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFFF2E63)),
+                "Xavfli huquqlar (${res.dangerousPermissions.length}):",
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFFF2E63)),
               ),
             ),
             const SizedBox(height: 8),
-            ...res.dangerousPermissions.map((dp) => _buildPermissionCard(dp, isCritical: true)),
-            const SizedBox(height: 14),
+            ...res.dangerousPermissions.map((dp) => _buildPermissionTile(dp, isCritical: true)),
+            const SizedBox(height: 12),
           ],
 
-          // Standart Ruxsatlar
+          // Standart ruxsatlar
           if (res.normalPermissions.isNotEmpty) ...[
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                "🟢 Standart Tizim Huquqlari (${res.normalPermissions.length}):",
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                "Standart huquqlar (${res.normalPermissions.length}):",
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70),
               ),
             ),
             const SizedBox(height: 8),
-            ...res.normalPermissions.map((np) => _buildPermissionCard(np, isCritical: false)),
-            const SizedBox(height: 20),
+            ...res.normalPermissions.map((np) => _buildPermissionTile(np, isCritical: false)),
+            const SizedBox(height: 18),
           ],
 
-          // Harakat tugmalari
+          // Tugmalar
           Row(
             children: [
               if (res.isSafe)
@@ -861,13 +1057,13 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00FF88),
                       foregroundColor: const Color(0xFF05101E),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.install_mobile, color: Colors.black87),
                     label: const Text(
-                      "XAVFSIZ O'RNATISH",
-                      style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                      "O'RNATISH",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 )
@@ -878,52 +1074,49 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF2E63),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.delete_forever_outlined),
+                    icon: const Icon(Icons.delete_outline),
                     label: const Text(
-                      "TAHDIDNI XOTIRADAN O'CHIRISH",
-                      style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                      "FAYLNI O'CHIRISH",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               OutlinedButton(
                 onPressed: () {
+                  _triggerHaptic(HapticFeedbackType.selection);
                   setState(() {
                     _analysisResult = null;
                   });
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white70,
-                  side: const BorderSide(color: Color(0xFF1E293B)),
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  side: const BorderSide(color: Color(0xFF1F293D)),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text("Yopish"),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _buildPermissionCard(PermissionInfo p, {required bool isCritical}) {
+  Widget _buildPermissionTile(PermissionInfo p, {required bool isCritical}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isCritical
-            ? const Color(0xFFFF2E63).withValues(alpha: 0.08)
-            : const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(12),
+        color: isCritical ? const Color(0xFFFF2E63).withValues(alpha: 0.08) : const Color(0xFF111827),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isCritical
-              ? const Color(0xFFFF2E63).withValues(alpha: 0.3)
-              : const Color(0xFF1E293B),
+          color: isCritical ? const Color(0xFFFF2E63).withValues(alpha: 0.3) : const Color(0xFF1F293D),
         ),
       ),
       child: Row(
@@ -932,31 +1125,22 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           Icon(
             isCritical ? Icons.error_outline : Icons.check_circle_outline,
             color: isCritical ? const Color(0xFFFF2E63) : const Color(0xFF00FF88),
-            size: 20,
+            size: 18,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      p.title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: isCritical ? const Color(0xFFFF2E63) : Colors.white,
-                      ),
-                    ),
-                    Text(
-                      p.category,
-                      style: const TextStyle(fontSize: 10, color: Colors.white38),
-                    ),
-                  ],
+                Text(
+                  p.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: isCritical ? const Color(0xFFFF2E63) : Colors.white,
+                  ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   p.description,
                   style: const TextStyle(fontSize: 11, color: Colors.white60),
@@ -969,16 +1153,16 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     );
   }
 
-  Widget _buildCyberBottomNav() {
+  Widget _buildCleanBottomNav() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF0A0F1D),
-        border: Border(top: BorderSide(color: Color(0xFF1E293B), width: 1)),
+        color: Color(0xFF101624),
+        border: Border(top: BorderSide(color: Color(0xFF1E2638), width: 1)),
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedTab,
         onTap: (index) {
-          HapticFeedback.selectionClick();
+          _triggerHaptic(HapticFeedbackType.selection);
           setState(() {
             _selectedTab = index;
           });
@@ -989,24 +1173,26 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
         unselectedItemColor: Colors.white38,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.shield_outlined),
-            activeIcon: Icon(Icons.shield),
-            label: "Posbon",
+            icon: const Icon(Icons.shield_outlined),
+            activeIcon: const Icon(Icons.shield),
+            label: _t("tabGuard"),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.security_outlined),
-            activeIcon: Icon(Icons.security),
-            label: "Kiber Audit",
+            icon: const Icon(Icons.lightbulb_outline),
+            activeIcon: const Icon(Icons.lightbulb),
+            label: _t("tabTips"),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.tune_outlined),
-            activeIcon: Icon(Icons.tune),
-            label: "Sozlamalar",
+            icon: const Icon(Icons.settings_outlined),
+            activeIcon: const Icon(Icons.settings),
+            label: _t("tabSettings"),
           ),
         ],
       ),
     );
   }
 }
+
+enum HapticFeedbackType { selection, medium, heavy }
