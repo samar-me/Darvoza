@@ -7,6 +7,8 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -18,6 +20,7 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.darvoza.security/apk_receiver"
     private var pendingApkPath: String? = null
+    private var isSelfTriggered = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -42,6 +45,22 @@ class MainActivity : FlutterActivity() {
                     } else {
                         result.error("INVALID_PATH", "Path is null", null)
                     }
+                }
+                "checkInstallPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        result.success(packageManager.canRequestPackageInstalls())
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "requestInstallPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    }
+                    result.success(true)
                 }
                 "installApk" -> {
                     val path = call.argument<String>("path")
@@ -89,7 +108,7 @@ class MainActivity : FlutterActivity() {
                 val appName = pm.getApplicationLabel(appInfo).toString()
                 val packageName = pi.packageName
                 val versionName = pi.versionName ?: "1.0"
-                val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     pi.longVersionCode
                 } else {
                     @Suppress("DEPRECATION")
@@ -101,7 +120,6 @@ class MainActivity : FlutterActivity() {
                 data["versionName"] = versionName
                 data["versionCode"] = versionCode
 
-                // Ikonkani baytlar shaklida olish (PNG)
                 try {
                     val iconDrawable = pm.getApplicationIcon(appInfo)
                     val bitmap = drawableToBitmap(iconDrawable)
@@ -136,16 +154,51 @@ class MainActivity : FlutterActivity() {
             "${applicationContext.packageName}.fileprovider",
             file
         )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        isSelfTriggered = true
+
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = apkUri
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
         }
+
+        // Tizimdagi standart o'rnatuvchini topish (Darvoza o'zini o'zi qayta chaqirmasligi uchun)
+        val pm = packageManager
+        val resolveInfos = pm.queryIntentActivities(
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+            },
+            PackageManager.MATCH_DEFAULT_ONLY
+        )
+
+        var targeted = false
+        for (info in resolveInfos) {
+            val pkg = info.activityInfo.packageName
+            // Google yoki Android tizimining PackageInstaller ilovasi
+            if (pkg.contains("packageinstaller") || pkg.contains("google.android.packageinstaller")) {
+                intent.setClassName(pkg, info.activityInfo.name)
+                targeted = true
+                break
+            }
+        }
+
+        if (!targeted) {
+            intent.action = Intent.ACTION_VIEW
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+        }
+
         startActivity(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Agar o'zimiz tizimga o'rnatish uchun yuborgan bo'lsak, uni ushlab qolmaymiz
+        if (isSelfTriggered) {
+            isSelfTriggered = false
+            return
+        }
         handleIntent(intent)
         if (pendingApkPath != null && flutterEngine != null) {
             MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, CHANNEL)
@@ -155,6 +208,10 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (isSelfTriggered) {
+            isSelfTriggered = false
+            return
+        }
         val uri = intent?.data ?: return
         try {
             val localPath = copyUriToCache(uri)

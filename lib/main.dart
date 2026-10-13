@@ -414,6 +414,41 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   Future<void> _installApk(String path) async {
     _triggerHaptic(HapticFeedbackType.selection);
     try {
+      final canInstall = await _platform.invokeMethod<bool>('checkInstallPermission') ?? true;
+      if (!canInstall && mounted) {
+        final allow = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF111827),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text("Ruxsat zarur", style: TextStyle(fontWeight: FontWeight.bold)),
+            content: const Text(
+              "Ilovani o'rnatish uchun 'Noma'lum manbalardan o'rnatish' ruxsatini yoqishingiz kerak.",
+              style: TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Bekor qilish", style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: const Color(0xFF05101E),
+                ),
+                child: const Text("Sozlamalarni ochish"),
+              ),
+            ],
+          ),
+        );
+
+        if (allow == true) {
+          await _platform.invokeMethod('requestInstallPermission');
+        }
+        return;
+      }
+
       await _platform.invokeMethod('installApk', {'path': path});
     } catch (e) {
       if (mounted) {
