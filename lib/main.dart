@@ -79,12 +79,14 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   static const MethodChannel _platform =
       MethodChannel('com.darvoza.security/apk_receiver');
 
-  int _selectedTab = 0; // 0: Himoya (Asosiy), 1: Xavfsizlik bo'yicha maslahatlar, 2: Sozlamalar
+  int _selectedTab = 0; // 0: Himoya, 1: Ilovalar Auditi, 2: Maslahatlar, 3: Sozlamalar
   bool _isScanning = false;
   double _scanProgress = 0.0;
   String _scanStatusText = "FAYL TAHLIL QILINMOQDA...";
   ApkAnalysisResult? _analysisResult;
   bool _autoGuardActive = true;
+  List<dynamic> _installedApps = [];
+  bool _isLoadingApps = false;
 
   // Ko'p tilli lug'at (Localization)
   Map<String, Map<String, String>> get _strings => {
@@ -94,6 +96,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "active": "FAOL",
           "inactive": "O'CHIRILGAN",
           "tabGuard": "Himoya",
+          "tabAudit": "Ilovalar Auditi",
           "tabTips": "Maslahatlar",
           "tabSettings": "Sozlamalar",
           "autoGuardTitle": "Avtomatik himoya yoqilgan",
@@ -104,6 +107,12 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "offlineDesc": "Internet talab qilinmaydi",
           "shaTitle": "Raqamli imzo",
           "shaDesc": "Soxta ilovalarni aniqlash",
+          "telegramTitle": "Telegram & Yuklamalar",
+          "telegramDesc": "Oxirgi yuklangan APK fayllar",
+          "btnScanTelegram": "Telegram APK-larini tekshirish",
+          "auditTitle": "O'rnatilgan ilovalar xavfsizligi",
+          "auditDesc": "Telefoningizdagi shaxsiy ma'lumotlarga kirish huquqiga ega ilovalar ro'yxati:",
+          "btnRefreshAudit": "Qayta tekshirish",
           "settingsTitle": "Sozlamalar",
           "langTitle": "Ilova tili",
           "hapticTitle": "Tugma bosilganda tebranish",
@@ -128,6 +137,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "active": "АКТИВЕН",
           "inactive": "ОТКЛЮЧЕН",
           "tabGuard": "Защита",
+          "tabAudit": "Аудит",
           "tabTips": "Советы",
           "tabSettings": "Настройки",
           "autoGuardTitle": "Автозащита включена",
@@ -138,6 +148,12 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "offlineDesc": "Работает без интернета",
           "shaTitle": "Цифровая подпись",
           "shaDesc": "Поиск поддельных APK",
+          "telegramTitle": "Telegram и Загрузки",
+          "telegramDesc": "Последние скачанные APK",
+          "btnScanTelegram": "Проверить APK из Telegram",
+          "auditTitle": "Аудит установленных приложений",
+          "auditDesc": "Приложения с доступом к вашим конфиденциальным данным:",
+          "btnRefreshAudit": "Обновить список",
           "settingsTitle": "Настройки",
           "langTitle": "Язык приложения",
           "hapticTitle": "Вибрация при нажатии",
@@ -162,6 +178,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "active": "ACTIVE",
           "inactive": "DISABLED",
           "tabGuard": "Guard",
+          "tabAudit": "App Audit",
           "tabTips": "Tips",
           "tabSettings": "Settings",
           "autoGuardTitle": "Auto-Guard is Active",
@@ -172,6 +189,12 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "offlineDesc": "No internet connection needed",
           "shaTitle": "Digital Signature",
           "shaDesc": "Detect fake & modified apps",
+          "telegramTitle": "Telegram & Downloads",
+          "telegramDesc": "Recently downloaded APK files",
+          "btnScanTelegram": "Scan Telegram APKs",
+          "auditTitle": "Installed Apps Audit",
+          "auditDesc": "Apps having access to your sensitive device permissions:",
+          "btnRefreshAudit": "Refresh Audit",
           "settingsTitle": "Settings",
           "langTitle": "App Language",
           "hapticTitle": "Haptic Feedback",
@@ -483,6 +506,152 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     }
   }
 
+  Future<void> _loadInstalledApps() async {
+    setState(() {
+      _isLoadingApps = true;
+    });
+    try {
+      final apps = await _platform.invokeMethod<List<dynamic>>('getInstalledAppsAudit');
+      if (mounted) {
+        setState(() {
+          _installedApps = apps ?? [];
+          _isLoadingApps = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoadingApps = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _scanTelegramDownloads() async {
+    _triggerHaptic(HapticFeedbackType.selection);
+    try {
+      final files = await _platform.invokeMethod<List<dynamic>>('scanTelegramDownloads');
+      if (!mounted) return;
+
+      if (files == null || files.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF1E2638),
+            content: Text("Telegram yoki Yuklamalar papkasida yangi APK topilmadi."),
+          ),
+        );
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: const Color(0xFF101624),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Telegram & Yuklamalar (APK)",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    "${files.length} ta fayl",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF00FF88),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  itemBuilder: (c, idx) {
+                    final item = files[idx] as Map<dynamic, dynamic>;
+                    final name = item['fileName'] as String? ?? 'noma\'lum.apk';
+                    final path = item['path'] as String;
+                    final size = item['size'] as int? ?? 0;
+                    final sizeMb = (size / (1024 * 1024)).toStringAsFixed(1);
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF162032),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF223048)),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00FF88).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.android, color: Color(0xFF00FF88)),
+                        ),
+                        title: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "$sizeMb MB • Telegram",
+                          style: const TextStyle(fontSize: 11, color: Colors.white60),
+                        ),
+                        trailing: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _runComprehensiveScan(path);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00FF88),
+                            foregroundColor: const Color(0xFF05101E),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            minimumSize: Size.zero,
+                          ),
+                          child: const Text(
+                            "TEKSHIRISH",
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Yuklamalarni tekshirishda xatolik: $e")),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -622,8 +791,10 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       case 0:
         return _buildGuardDashboard();
       case 1:
-        return _buildTipsDashboard();
+        return _buildAppAuditDashboard();
       case 2:
+        return _buildTipsDashboard();
+      case 3:
         return _buildSettingsDashboard();
       default:
         return _buildGuardDashboard();
@@ -811,8 +982,240 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+
+          // 1. TELEGRAM VA YUKLAMALAR PAPKASIDAN TEZKOR TEKSHIRUV KARTASI
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF0088CC).withValues(alpha: 0.15),
+                  const Color(0xFF111827),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF0088CC).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0088CC).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.telegram, color: Color(0xFF0088CC), size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _t("telegramTitle"),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _t("telegramDesc"),
+                        style: const TextStyle(fontSize: 11, color: Colors.white60),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _scanTelegramDownloads,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0088CC),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    "TEKSHIRISH",
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  // 3. TELEFONDAGI ILOVALAR AUDITI (O'rnatilgan dasturlar nazorati)
+  Widget _buildAppAuditDashboard() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t("auditTitle"),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _t("auditDesc"),
+                      style: const TextStyle(fontSize: 11, color: Colors.white54),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _isLoadingApps ? null : _loadInstalledApps,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: const Color(0xFF05101E),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: _isLoadingApps
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
+                      )
+                    : const Icon(Icons.refresh, size: 16, color: Colors.black87),
+                label: Text(
+                  _t("btnRefreshAudit"),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _isLoadingApps
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                )
+              : _installedApps.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.verified_user_outlined, size: 56, color: Color(0xFF00FF88)),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Audit hali o'tkazilmadi",
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white70),
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton(
+                            onPressed: _loadInstalledApps,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00FF88),
+                              foregroundColor: const Color(0xFF05101E),
+                            ),
+                            child: const Text("Ilovalarni tekshirish"),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      itemCount: _installedApps.length,
+                      itemBuilder: (context, index) {
+                        final app = _installedApps[index] as Map<dynamic, dynamic>;
+                        final appName = app['appName'] as String? ?? 'Noma\'lum';
+                        final packageName = app['packageName'] as String? ?? '';
+                        final dangerousCount = app['dangerousCount'] as int? ?? 0;
+                        final iconBytes = app['iconBytes'] as Uint8List?;
+
+                        final isHighRisk = dangerousCount >= 3;
+                        final riskColor = isHighRisk
+                            ? const Color(0xFFFF2E63)
+                            : (dangerousCount > 0 ? const Color(0xFFFFB800) : const Color(0xFF00FF88));
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF111827),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isHighRisk
+                                  ? const Color(0xFFFF2E63).withValues(alpha: 0.4)
+                                  : const Color(0xFF1F293D),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E2638),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: iconBytes != null
+                                      ? Image.memory(iconBytes, fit: BoxFit.cover)
+                                      : const Icon(Icons.android, color: Colors.white60),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      appName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      packageName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10, color: Colors.white38),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: riskColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: riskColor.withValues(alpha: 0.4)),
+                                ),
+                                child: Text(
+                                  dangerousCount > 0 ? "$dangerousCount ta maxfiy ruxsat" : "Xavfsiz",
+                                  style: TextStyle(
+                                    color: riskColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 
@@ -1158,6 +1561,45 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                     ),
                   ],
                 ),
+                if (res.isFakeSuspect) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF2E63).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFF2E63), width: 1.5),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF2E63), size: 24),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "🚨 SOXTA / FISHING ILОVA ANIQLANDI!",
+                                style: TextStyle(
+                                  color: Color(0xFFFF2E63),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                res.fakeWarningReason ?? "Bu ilova o'zini mashhur brend deb ko'rsatmoqda, lekin soxta!",
+                                style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
@@ -1361,11 +1803,15 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedTab,
+        type: BottomNavigationBarType.fixed,
         onTap: (index) {
           _triggerHaptic(HapticFeedbackType.selection);
           setState(() {
             _selectedTab = index;
           });
+          if (index == 1 && _installedApps.isEmpty) {
+            _loadInstalledApps();
+          }
         },
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -1378,6 +1824,11 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
             icon: const Icon(Icons.shield_outlined),
             activeIcon: const Icon(Icons.shield),
             label: _t("tabGuard"),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.security_outlined),
+            activeIcon: const Icon(Icons.security),
+            label: _t("tabAudit"),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.lightbulb_outline),

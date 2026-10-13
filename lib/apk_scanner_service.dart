@@ -23,6 +23,8 @@ class ApkAnalysisResult {
   final String reason;
   final Uint8List? appIconBytes;
   final String? versionName;
+  final bool isFakeSuspect;
+  final String? fakeWarningReason;
   final List<String> vulnerabilityNotes;
 
   ApkAnalysisResult({
@@ -44,6 +46,8 @@ class ApkAnalysisResult {
     this.appIconBytes,
     this.minSdk,
     this.targetSdk,
+    this.isFakeSuspect = false,
+    this.fakeWarningReason,
   });
 
   bool get isSafe => threatLevel == ThreatLevel.safe;
@@ -311,6 +315,37 @@ class ApkScannerService {
     final realVersionName = nativeMetadata?['versionName'] as String?;
     final iconBytes = nativeMetadata?['iconBytes'] as Uint8List?;
 
+    // 2. SOXTALIKNI ANIQLASH (Fake / Clone Detector)
+    bool isFake = false;
+    String? fakeReason;
+
+    final lowerName = realAppName.toLowerCase();
+    final lowerPkg = (realPackageName ?? '').toLowerCase();
+
+    if (lowerName.contains('click') && !lowerPkg.contains('click')) {
+      isFake = true;
+      fakeReason = "DIQQAT: Ilova nomi 'Click', lekin uning paketi rasmiy Click'ga tegishli emas! Bu soxta/fishing ilova bo'lishi mumkin.";
+    } else if (lowerName.contains('payme') && !lowerPkg.contains('payme')) {
+      isFake = true;
+      fakeReason = "DIQQAT: Ilova nomi 'Payme', lekin uning paketi rasmiy Payme emas! Bank ma'lumotlarini o'g'irlash xavfi bor.";
+    } else if (lowerName.contains('uzum') && !lowerPkg.contains('uzum')) {
+      isFake = true;
+      fakeReason = "DIQQAT: Ilova nomi 'Uzum', lekin uning paketi rasmiy Uzum emas!";
+    } else if (lowerName.contains('telegram') && !lowerPkg.contains('telegram')) {
+      isFake = true;
+      fakeReason = "DIQQAT: 'Telegram' nomi ostida yashiringan shubhali modifikatsiya!";
+    } else if (lowerName.contains('whatsapp') && !lowerPkg.contains('whatsapp')) {
+      isFake = true;
+      fakeReason = "DIQQAT: 'WhatsApp' nomi ostida yashiringan shubhali modifikatsiya!";
+    }
+
+    if (isFake) {
+      score = (score > 30) ? 30 : score;
+      threatLevel = ThreatLevel.critical;
+      summaryTitle = "SOXTA ILОVA (FAKE / CLONE)";
+      reason = fakeReason!;
+    }
+
     return ApkAnalysisResult(
       fileName: fileName,
       filePath: filePath,
@@ -330,6 +365,8 @@ class ApkScannerService {
       appIconBytes: iconBytes,
       minSdk: minSdk,
       targetSdk: targetSdk,
+      isFakeSuspect: isFake,
+      fakeWarningReason: fakeReason,
     );
   }
 

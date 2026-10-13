@@ -98,6 +98,22 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_PATH", "Path is null", null)
                     }
                 }
+                "getInstalledAppsAudit" -> {
+                    try {
+                        val apps = getInstalledAppsWithPermissions()
+                        result.success(apps)
+                    } catch (e: Exception) {
+                        result.error("AUDIT_FAILED", e.message, null)
+                    }
+                }
+                "scanTelegramDownloads" -> {
+                    try {
+                        val apks = findRecentDownloadedApks()
+                        result.success(apks)
+                    } catch (e: Exception) {
+                        result.error("SCAN_DOWNLOADS_FAILED", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -251,4 +267,88 @@ class MainActivity : FlutterActivity() {
         }
         return tempFile.absolutePath
     }
+
+    private fun getInstalledAppsWithPermissions(): List<Map<String, Any?>> {
+        val pm = packageManager
+        val packages = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+        val list = mutableListOf<Map<String, Any?>>()
+
+        for (pi in packages) {
+            val appInfo = pi.applicationInfo ?: continue
+            // Tizim dasturlari (System apps) emas, faqat foydalanuvchi o'rnatgan dasturlarni filtrlash
+            val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+            if (isSystemApp && !pi.packageName.contains("telegram") && !pi.packageName.contains("whatsapp")) {
+                continue
+            }
+
+            val appName = pm.getApplicationLabel(appInfo).toString()
+            val packageName = pi.packageName
+            val permissions = pi.requestedPermissions?.toList() ?: emptyList<String>()
+
+            // Faqat maxfiy huquqlari bo'lgan ilovalarni yoki umumiy ilovalarni olish
+            val dangerous = permissions.filter {
+                it.contains("SMS") || it.contains("RECORD_AUDIO") || it.contains("CAMERA") ||
+                it.contains("LOCATION") || it.contains("CONTACTS") || it.contains("ACCESSIBILITY")
+            }
+
+            val item = mutableMapOf<String, Any?>()
+            item["appName"] = appName
+            item["packageName"] = packageName
+            item["versionName"] = pi.versionName ?: "1.0"
+            item["isSystemApp"] = isSystemApp
+            item["dangerousCount"] = dangerous.size
+            item["dangerousPermissions"] = dangerous
+
+            // Kichik rasm (icon)
+            try {
+                val iconDrawable = pm.getApplicationIcon(appInfo)
+                val bitmap = drawableToBitmap(iconDrawable)
+                val stream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.PNG, 80, stream)
+                item["iconBytes"] = stream.toByteArray()
+            } catch (e: Exception) {
+                item["iconBytes"] = null
+            }
+
+            list.add(item)
+        }
+
+        // Xavflilik darajasi yuqorilari birinchi chiqadi
+        list.sortByDescending { (it["dangerousCount"] as? Int) ?: 0 }
+        return list
+    }
+
+    private fun findRecentDownloadedApks(): List<Map<String, Any?>> {
+        val results = mutableListOf<Map<String, Any?>>()
+        val candidateDirs = listOf(
+            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Telegram"),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            File(android.os.Environment.getExternalStorageDirectory(), "Telegram/Telegram Documents")
+        )
+
+        for (dir in candidateDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".apk", ignoreCase = true) }
+                if (files != null) {
+                    for (file in files) {
+                        try {
+                            val item = mutableMapOf<String, Any?>()
+                            item["path"] = file.absolutePath
+                            item["fileName"] = file.name
+                            item["size"] = file.length()
+                            item["lastModified"] = file.lastModified()
+                            results.add(item)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+        }
+
+        // Eng yangi yuklangan fayllar yuqorida turadi
+        results.sortByDescending { (it["lastModified"] as? Long) ?: 0L }
+        return results.take(15)
+    }
 }
+
