@@ -26,6 +26,10 @@ class ApkAnalysisResult {
   final bool isFakeSuspect;
   final String? fakeWarningReason;
   final List<String> vulnerabilityNotes;
+  final List<String> extractedUrls;
+  final List<String> extractedIps;
+  final List<String> suspiciousDomains;
+  final List<String> botTokens;
 
   ApkAnalysisResult({
     required this.fileName,
@@ -48,6 +52,10 @@ class ApkAnalysisResult {
     this.targetSdk,
     this.isFakeSuspect = false,
     this.fakeWarningReason,
+    this.extractedUrls = const [],
+    this.extractedIps = const [],
+    this.suspiciousDomains = const [],
+    this.botTokens = const [],
   });
 
   bool get isSafe => threatLevel == ThreatLevel.safe;
@@ -346,6 +354,18 @@ class ApkScannerService {
       reason = fakeReason!;
     }
 
+    final urls = (nativeMetadata?['urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final ips = (nativeMetadata?['ips'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final suspiciousDomains = (nativeMetadata?['suspiciousDomains'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final botTokens = (nativeMetadata?['botTokens'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+
+    if (suspiciousDomains.isNotEmpty || botTokens.isNotEmpty) {
+      score = (score > 25) ? 25 : score;
+      threatLevel = ThreatLevel.critical;
+      summaryTitle = "XAVFLI: YASHIRIN SERVER / BOT ANIQLANDI";
+      reason = "Fayl ichida shubhali tashqi domenlar yoki Telegram Bot boshqaruvi aniqlandi!";
+    }
+
     return ApkAnalysisResult(
       fileName: fileName,
       filePath: filePath,
@@ -367,6 +387,10 @@ class ApkScannerService {
       targetSdk: targetSdk,
       isFakeSuspect: isFake,
       fakeWarningReason: fakeReason,
+      extractedUrls: urls,
+      extractedIps: ips,
+      suspiciousDomains: suspiciousDomains,
+      botTokens: botTokens,
     );
   }
 

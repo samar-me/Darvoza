@@ -283,10 +283,18 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     try {
       Map<dynamic, dynamic>? nativeMeta;
       try {
-        nativeMeta = await _platform.invokeMethod<Map<dynamic, dynamic>>(
+        final meta = await _platform.invokeMethod<Map<dynamic, dynamic>>(
           'getApkMetadata',
           {'path': filePath},
         );
+        final deepScan = await _platform.invokeMethod<Map<dynamic, dynamic>>(
+          'deepScanApkStrings',
+          {'path': filePath},
+        );
+        nativeMeta = Map<dynamic, dynamic>.from(meta ?? {});
+        if (deepScan != null) {
+          nativeMeta.addAll(deepScan);
+        }
       } catch (_) {}
 
       final result = await ApkScannerService.analyzeApk(
@@ -652,6 +660,73 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
     }
   }
 
+  Future<void> _cleanTrashAndOptimize() async {
+    _triggerHaptic(HapticFeedbackType.heavy);
+    try {
+      final res = await _platform.invokeMethod<Map<dynamic, dynamic>>('cleanTrashApks');
+      final mb = res?['mbFreed'] ?? '0.0';
+      final count = res?['deletedCount'] ?? 0;
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF101624),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.cleaning_services, color: Color(0xFF00FF88)),
+                SizedBox(width: 10),
+                Text("Zero Trash Tozalandi", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
+            ),
+            content: Text(
+              "Telefon xotirasi to'liq tozalandi!\n\n• O'chirilgan APK fayllar: $count ta\n• Bo'shatilgan xotira: $mb MB",
+              style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: const Color(0xFF05101E),
+                ),
+                child: const Text("Tushunarli", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Tozalashda xatolik: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleWatcherService() async {
+    _triggerHaptic(HapticFeedbackType.selection);
+    setState(() {
+      _autoGuardActive = !_autoGuardActive;
+    });
+
+    if (_autoGuardActive) {
+      try {
+        await _platform.invokeMethod('startWatcherService');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFF00FF88),
+              content: Text("Vaultix Silent Watcher (Fon nazorati) ishga tushirildi!"),
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -738,12 +813,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           ),
           // Faollik holati (Bosilganda almashtirish imkoniyati bilan)
           GestureDetector(
-            onTap: () {
-              _triggerHaptic(HapticFeedbackType.selection);
-              setState(() {
-                _autoGuardActive = !_autoGuardActive;
-              });
-            },
+            onTap: _toggleWatcherService,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -1042,6 +1112,65 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
                   ),
                   child: const Text(
                     "TEKSHIRISH",
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 2. ZERO TRASH: Barcha ortiqcha APK axlatlarini bitta bosishda tozalash
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00FF88).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.cleaning_services, color: Color(0xFF00FF88), size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        "Zero Trash (Xotirani tozalash)",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        "Yuklangan va keraksiz APK axlatlarini o'chirish",
+                        style: TextStyle(fontSize: 11, color: Colors.white60),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _cleanTrashAndOptimize,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FF88),
+                    foregroundColor: const Color(0xFF05101E),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    "TOZALASH",
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -1650,6 +1779,62 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
             ),
           ),
           const SizedBox(height: 14),
+
+          // SHAFQATSIZ STRING & URL SKANER NATIJALARI
+          if (res.suspiciousDomains.isNotEmpty || res.extractedIps.isNotEmpty || res.botTokens.isNotEmpty || res.extractedUrls.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF131B2E),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: res.suspiciousDomains.isNotEmpty || res.botTokens.isNotEmpty
+                      ? const Color(0xFFFF2E63).withValues(alpha: 0.6)
+                      : const Color(0xFF00E5FF).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        res.suspiciousDomains.isNotEmpty ? Icons.bug_report : Icons.travel_explore,
+                        color: res.suspiciousDomains.isNotEmpty ? const Color(0xFFFF2E63) : const Color(0xFF00E5FF),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        res.suspiciousDomains.isNotEmpty ? "SHUBHALI TASHQI MANZILLAR (XAVF!)" : "KOD ICHIDAGI URL MANZILLAR",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: res.suspiciousDomains.isNotEmpty ? const Color(0xFFFF2E63) : const Color(0xFF00E5FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (res.botTokens.isNotEmpty) ...[
+                    const Text("Telegram Bot Tokenlari (C2 Server):", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange)),
+                    ...res.botTokens.map((t) => Text("• $t", style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.white70))),
+                    const SizedBox(height: 6),
+                  ],
+                  if (res.suspiciousDomains.isNotEmpty) ...[
+                    const Text("Shubhali domenlar (.ru/.xyz/.top):", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFF2E63))),
+                    ...res.suspiciousDomains.map((d) => Text("• $d", style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.white70))),
+                    const SizedBox(height: 6),
+                  ],
+                  if (res.extractedIps.isNotEmpty) ...[
+                    const Text("Qattiq yozilgan IP serverlar:", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
+                    ...res.extractedIps.map((ip) => Text("• $ip", style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.white70))),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Xavfli ruxsatlar
           if (res.dangerousPermissions.isNotEmpty) ...[

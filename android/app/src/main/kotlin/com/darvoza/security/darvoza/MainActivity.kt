@@ -114,6 +114,40 @@ class MainActivity : FlutterActivity() {
                         result.error("SCAN_DOWNLOADS_FAILED", e.message, null)
                     }
                 }
+                "startWatcherService" -> {
+                    try {
+                        val serviceIntent = Intent(this, ApkWatcherService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(serviceIntent)
+                        } else {
+                            startService(serviceIntent)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("WATCHER_START_FAILED", e.message, null)
+                    }
+                }
+                "deepScanApkStrings" -> {
+                    val path = call.argument<String>("path")
+                    if (path != null) {
+                        try {
+                            val scanResult = performDeepStringAndUrlScan(path)
+                            result.success(scanResult)
+                        } catch (e: Exception) {
+                            result.error("DEEP_SCAN_FAILED", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_PATH", "Path is null", null)
+                    }
+                }
+                "cleanTrashApks" -> {
+                    try {
+                        val cleaned = cleanAllDownloadedApkTrash()
+                        result.success(cleaned)
+                    } catch (e: Exception) {
+                        result.error("CLEAN_FAILED", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -349,6 +383,114 @@ class MainActivity : FlutterActivity() {
         // Eng yangi yuklangan fayllar yuqorida turadi
         results.sortByDescending { (it["lastModified"] as? Long) ?: 0L }
         return results.take(15)
+    }
+
+    /**
+     * SHAFAQATSIZ STRING VA URL SKANER:
+     * APK arxividagi barcha DEX va resurslardan yashirin URL, IP, Bot tokenlari va shubhali domanlarni qidiradi.
+     */
+    private fun performDeepStringAndUrlScan(filePath: String): Map<String, Any?> {
+        val file = File(filePath)
+        val extractedUrls = mutableSetOf<String>()
+        val extractedIps = mutableSetOf<String>()
+        val suspiciousTokens = mutableSetOf<String>()
+        val suspiciousDomains = mutableSetOf<String>()
+
+        val urlPattern = Regex("https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9&%_.~+-]*)*")
+        val ipPattern = Regex("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b")
+        val botTokenPattern = Regex("[0-9]{8,10}:[a-zA-Z0-9_-]{35}")
+
+        try {
+            val zipFile = java.util.zip.ZipFile(file)
+            val entries = zipFile.entries()
+
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (entry.name.endsWith(".dex") || entry.name == "resources.arsc" || entry.name == "AndroidManifest.xml") {
+                    val stream = zipFile.getInputStream(entry)
+                    val buffer = ByteArray(entry.size.coerceAtMost(1024 * 1024 * 5).toInt()) // Max 5MB per dex chunk
+                    val read = stream.read(buffer)
+                    if (read > 0) {
+                        val content = String(buffer, 0, read, Charsets.ISO_8859_1)
+
+                        // URL-larni yig'ish
+                        urlPattern.findAll(content).forEach { match ->
+                            val url = match.value
+                            if (!url.contains("schemas.android.com") && !url.contains("w3.org") && !url.contains("google.com")) {
+                                extractedUrls.add(url)
+                                if (url.contains(".ru") || url.contains(".xyz") || url.contains(".top") || url.contains(".cc")) {
+                                    suspiciousDomains.add(url)
+                                }
+                            }
+                        }
+
+                        // Shubhali qattiq yozilgan IP manzillarni yig'ish
+                        ipPattern.findAll(content).forEach { match ->
+                            val ip = match.value
+                            if (!ip.startsWith("127.") && !ip.startsWith("0.0.") && !ip.startsWith("255.")) {
+                                extractedIps.add(ip)
+                            }
+                        }
+
+                        // Telegram bot tokenlari
+                        botTokenPattern.findAll(content).forEach { match ->
+                            suspiciousTokens.add(match.value)
+                        }
+                    }
+                    stream.close()
+                }
+            }
+            zipFile.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        val result = mutableMapOf<String, Any?>()
+        result["urls"] = extractedUrls.take(25).toList()
+        result["ips"] = extractedIps.take(10).toList()
+        result["suspiciousDomains"] = suspiciousDomains.toList()
+        result["botTokens"] = suspiciousTokens.toList()
+        result["hasMaliciousIndicators"] = suspiciousDomains.isNotEmpty() || suspiciousTokens.isNotEmpty() || extractedIps.isNotEmpty()
+
+        return result
+    }
+
+    /**
+     * ZERO TRASH: Barcha yuklab olingan va o'rnatilgan APK axlatlarini bitta bosishda tozalash
+     */
+    private fun cleanAllDownloadedApkTrash(): Map<String, Any?> {
+        var totalBytesFreed = 0L
+        var deletedFilesCount = 0
+
+        val candidateDirs = listOf(
+            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Telegram"),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            File(android.os.Environment.getExternalStorageDirectory(), "Telegram/Telegram Documents"),
+            cacheDir
+        )
+
+        for (dir in candidateDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".apk", ignoreCase = true) }
+                if (files != null) {
+                    for (f in files) {
+                        try {
+                            val len = f.length()
+                            if (f.delete()) {
+                                totalBytesFreed += len
+                                deletedFilesCount++
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+
+        val res = mutableMapOf<String, Any?>()
+        res["deletedCount"] = deletedFilesCount
+        res["bytesFreed"] = totalBytesFreed
+        res["mbFreed"] = String.format(java.util.Locale.US, "%.1f", totalBytesFreed.toDouble() / (1024 * 1024))
+        return res
     }
 }
 
