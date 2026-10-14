@@ -91,8 +91,8 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
   // Ko'p tilli lug'at (Localization)
   Map<String, Map<String, String>> get _strings => {
         "uz": {
-          "appName": "DARVOZA",
-          "subtitle": "XAVFSIZLIK QALQONI",
+          "appName": "VAULTIX",
+          "subtitle": "KIBERXAVFSIZLIK QALQONI",
           "active": "FAOL",
           "inactive": "O'CHIRILGAN",
           "tabGuard": "Himoya",
@@ -118,7 +118,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "hapticTitle": "Tugma bosilganda tebranish",
           "privacyTitle": "Maxfiylik kafolati",
           "privacyDesc":
-              "Darvoza ilovasi shaxsiy ma'lumotlaringizni yig'maydi va serverga jo'natmaydi.",
+              "Vaultix ilovasi shaxsiy ma'lumotlaringizni yig'maydi va serverga jo'natmaydi.",
           "appVersion": "Dastur versiyasi",
           "tipsTitle": "Xavfsizlik bo'yicha muhim eslatmalar",
           "tip1Title": "SMS o'qish ruxsati",
@@ -129,10 +129,10 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
               "Bu ruxsat ilovaga ekranda yozgan parollaringizni ko'rish imkonini beradi. Buni faqat ishonchli dasturlarga bering.",
           "tip3Title": "Soxta yangilanishlar",
           "tip3Desc":
-              "Telegram kanallardan yuklangan noma'lum APK fayllarni o'rnatishdan oldin doimo Darvoza orqali tekshiring.",
+              "Telegram kanallardan yuklangan noma'lum APK fayllarni o'rnatishdan oldin doimo Vaultix orqali tekshiring.",
         },
         "ru": {
-          "appName": "DARVOZA",
+          "appName": "VAULTIX",
           "subtitle": "КИБЕР-ЩИТ",
           "active": "АКТИВЕН",
           "inactive": "ОТКЛЮЧЕН",
@@ -159,7 +159,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "hapticTitle": "Вибрация при нажатии",
           "privacyTitle": "Политика конфиденциальности",
           "privacyDesc":
-              "Darvoza не собирает и не отправляет ваши личные данные на сторонние серверы.",
+              "Vaultix не собирает и не отправляет ваши личные данные на сторонние серверы.",
           "appVersion": "Версия приложения",
           "tipsTitle": "Правила безопасности",
           "tip1Title": "Доступ к SMS",
@@ -173,7 +173,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
               "Всегда проверяйте файлы из Telegram и неизвестных сайтов перед установкой.",
         },
         "en": {
-          "appName": "DARVOZA",
+          "appName": "VAULTIX",
           "subtitle": "CYBER SHIELD",
           "active": "ACTIVE",
           "inactive": "DISABLED",
@@ -200,7 +200,7 @@ class _DarvozaMainScreenState extends State<DarvozaMainScreen> {
           "hapticTitle": "Haptic Feedback",
           "privacyTitle": "Privacy Assurance",
           "privacyDesc":
-              "Darvoza runs completely offline and never uploads your private files or analytics.",
+              "Vaultix runs completely offline and never uploads your private files or analytics.",
           "appVersion": "App Version",
           "tipsTitle": "Security Best Practices",
           "tip1Title": "SMS Read Permissions",
